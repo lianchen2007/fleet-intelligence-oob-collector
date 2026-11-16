@@ -4,6 +4,50 @@ Use this procedure when NICo hardware health already runs in the customer's Kube
 
 This procedure requires the existing NICo Deployment and the FI Helm release to run in the same namespace.
 
+## Configure an existing NICo during Helm installation or upgrade
+
+If your NICo uses its built-in defaults and explicit environment variables, you can have Helm connect it to the FI gateway while keeping its current image. Use this option when the NICo container does not load a TOML file and does not use `envFrom` for its configuration. Your existing NICo image must support `CARBIDE_HEALTH__SINKS__OTLP__ENABLED` and the TOML array accepted by `CARBIDE_HEALTH__SINKS__OTLP__TARGETS`.
+
+Add the following settings to your private FI values file, alongside the targets, backend, and Secret references described below:
+
+```yaml
+nicoHardwareHealth:
+  enabled: true
+  deploymentMode: external
+  external:
+    expectedImage: <exact-current-nico-image>
+    deploymentName: <existing-nico-deployment>
+    containerName: <existing-nico-container>
+    configureOtlp: true
+    configMode: environment
+
+otelGateway:
+  enabled: true
+```
+
+Run `helm upgrade --install` with those values and `--wait --timeout 10m`. After FI resources are installed, a Helm hook verifies the selected Deployment and image, saves the original OTLP settings in a dedicated Kubernetes Secret, and adds the FI gateway to the existing OTLP destination list. It enables OTLP, adds the gateway's source label, and waits for the NICo rollout. Repeating the upgrade preserves the customer destinations and does not restart NICo when the effective settings are unchanged. Existing NICo endpoint sources, credentials, other environment variables, mounts, containers, and image remain configured.
+
+The hook requires the two OTLP environment variables to have explicit values when present. Settings supplied through `valueFrom`, `envFrom`, a mounted TOML, or overlapping environment keys require integration through the original configuration source. Invalid target lists, duplicate FI destinations, an unexpected image, and conflicting changes to FI-managed settings fail the hook without silently replacing customer settings. NICo images with other configuration formats need their own compatibility validation; this option does not assert that they match the revision required by the mounted-TOML procedure.
+
+Check the hook Job and the NICo Deployment after installation. The Job's ServiceAccount can only read and patch the selected Deployment and the fixed-name backup Secret. The collector, NICo, and gateway do not receive Kubernetes API credentials from this integration.
+
+```bash
+kubectl get jobs --namespace "$NAMESPACE" \
+  -l app.kubernetes.io/component=external-nico-otel
+kubectl rollout status deployment/"$NICO_DEPLOYMENT" \
+  --namespace "$NAMESPACE"
+```
+
+For an unchanged existing environment configuration, set `configureOtlp: false` and upgrade using the same deployment and container names to restore the original OTLP settings. This restoration uses the live backup Secret, so run Helm with access to the cluster. Helm uninstall also restores the settings in a pre-delete hook before removing the gateway. Do not use `--no-hooks` to uninstall an integrated release. Keep the backup Secret until restoration has been verified; it is retained after uninstall. If the workload or FI-managed settings changed outside FI, restore through the original GMI source of truth before removing the gateway.
+
+On a failed NICo rollout, the hook attempts to restore the original settings and reports failure. An interrupted hook or failed restoration can require recovery from the backup or GMI source of truth. Helm's release rollback alone does not restore a Deployment owned by another release, so verify NICo before removing any FI gateway during recovery. Automatic configuration does not copy `inventory.targets` into NICo or establish that data reached FI: verify the existing telemetry route and the FI records using the checks in step 6.
+
+To restore earlier FI settings, upgrade with the earlier chart and values while retaining automatic OTLP configuration support, so the hook can reconcile from the live backup. Keep `--atomic` off and use this upgrade workflow instead of `helm rollback`: replaying a stored release manifest can replace the backup Secret with an earlier copy.
+
+## Integrate a mounted NICo TOML
+
+Use the remaining procedure when the existing NICo loads a volume-mounted TOML. This path preserves the file through structured merging, uses a qualified NICo image, and requires the explicit integration command after the Helm operation.
+
 ## Assumptions
 
 This integration assumes:

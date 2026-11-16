@@ -352,13 +352,17 @@ name = "fleet-intelligence-oob"
 version = "0.1.0"
 dependencies = [
  "backend-client",
+ "base64",
  "bmc-attestation",
  "bmc-dispatch",
  "bmc-inventory",
  "clap",
  "futures",
  "reqwest",
+ "serde",
+ "serde_json",
  "tokio",
+ "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
 ]

@@ -1,4 +1,4 @@
-{{- if and .Values.nicoHardwareHealth.enabled (eq .Values.nicoHardwareHealth.deploymentMode "external") }}
+{{- if and .Values.nicoHardwareHealth.enabled (eq .Values.nicoHardwareHealth.deploymentMode "external") (not .Values.nicoHardwareHealth.external.configureOtlp) }}
 {{- $gatewayEndpoint := "" -}}
 {{- if .Values.otelGateway.enabled -}}
 {{- $gatewayEndpoint = printf "http://%s:4317" (include "fleet-intelligence-oob-collector.otelGatewayName" .) -}}

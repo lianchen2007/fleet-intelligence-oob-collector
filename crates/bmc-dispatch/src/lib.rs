@@ -171,17 +171,27 @@ impl Dispatcher {
         let handle = runtime.handle();
         let driver_notify = Arc::clone(&notify);
         tokio::spawn(async move {
+            let mut wake_at: Option<Instant> = None;
             loop {
-                match runtime.next().await {
-                    RuntimeOutput::Work { .. } => {}
-                    RuntimeOutput::SleepUntil(when) => {
-                        tokio::select! {
-                            () = tokio::time::sleep_until(when.into()) => {}
-                            () = driver_notify.notified() => {}
+                tokio::select! {
+                    output = runtime.next() => match output {
+                        RuntimeOutput::Work { .. } => {}
+                        RuntimeOutput::SleepUntil(when) => {
+                            wake_at = Some(wake_at.map_or(when, |current: Instant| current.min(when)));
                         }
-                    }
-                    RuntimeOutput::Shutdown => break,
-                    RuntimeOutput::Runtime(event) => match event {},
+                        RuntimeOutput::Shutdown => break,
+                        RuntimeOutput::Runtime(event) => match event {},
+                    },
+                    () = async {
+                        match wake_at {
+                            Some(when) => tokio::time::sleep_until(when.into()).await,
+                            None => std::future::pending::<()>().await,
+                        }
+                    } => wake_at = None,
+                    // A queue signal can arrive before its waiter is polled. Keep the
+                    // deadline across that signal: Runtime::next emits each deadline
+                    // only once and will otherwise park after an early notification.
+                    () = driver_notify.notified() => {}
                 }
             }
         });
@@ -976,6 +986,38 @@ mod tests {
             BmcErrorClass::HttpResponse { status: 401 },
             "a skipped request reports the authentication failure that caused it"
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn delayed_requests_resume_after_idle_and_rate_limit_sleep() {
+        let dispatcher = Dispatcher::start(
+            DispatcherConfig {
+                global_max_in_flight: 128,
+                bmc_max_in_flight: 2,
+                bmc_requests_per_second: 10,
+                bmc_burst: 10,
+                workflow_queue_capacity: 128,
+            },
+            ["bmc".into()],
+        )
+        .unwrap();
+        // Enrollment lets the driver's initial empty poll finish before any BMC work.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let gate = dispatcher.inventory_gate("bmc").unwrap();
+        for index in 0..24 {
+            tokio::time::timeout(
+                Duration::from_secs(3),
+                gate.execute(async { Ok::<_, Infallible>(()) }),
+            )
+            .await
+            .unwrap_or_else(|_| {
+                panic!(
+                    "admission {index} stalled: {:?}",
+                    gate.lifecycle.handle.stats()
+                )
+            })
+            .unwrap();
+        }
     }
 
     #[derive(Debug)]

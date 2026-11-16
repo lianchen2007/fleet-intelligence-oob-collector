@@ -229,8 +229,13 @@ async fn run_runtime_until_shutdown(
     mut options: RuntimeOptions,
     mut shutdown: Shutdown,
 ) -> Result<(), Box<dyn Error>> {
+    tracing::info!("starting collector runtime");
     let collector_config = options.collector_config_from_env(|name| std::env::var(name))?;
     let target_config = config::load_config(&options.inventory.config)?;
+    tracing::info!(
+        target_count = target_config.targets.len(),
+        "collector configuration validated"
+    );
     let dispatcher = Arc::new(start_dispatcher(
         &options.inventory,
         &target_config.targets,
@@ -238,6 +243,7 @@ async fn run_runtime_until_shutdown(
     let backend_url = required_backend_option(options.backend_url.take(), "backend URL")?;
     let endpoints = BackendEndpoints::resolve(&backend_url)?;
     let agent_token = required_backend_option(options.agent_token.take(), "agent token")?;
+    tracing::info!("enrolling collector with backend");
     // The session owns the JWT lifecycle: enrolled_at is captured at enrollment and
     // refreshed whenever the agent re-enrolls (e.g. after a JWT rejection).
     let mut session = tokio::select! {
@@ -246,6 +252,7 @@ async fn run_runtime_until_shutdown(
         session = BackendSession::enroll(endpoints.enroll_endpoint.clone(), agent_token) => session?,
     };
     let interval = std::time::Duration::from_secs(options.interval_seconds.max(1));
+    tracing::info!("backend enrollment completed");
 
     // Reuse startup validation as the first cycle's snapshot. Later cycles reload
     // once, before dispatcher synchronization or either collection phase.

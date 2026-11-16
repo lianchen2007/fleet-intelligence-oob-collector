@@ -152,6 +152,8 @@ The executable is `bmc-collector`. Add `--help` to any command to list its optio
 | `--insecure-tls` | Off | Skip BMC certificate verification. |
 | `--disable-latency-probe` | Off | Skip network latency measurements. Also set by `FLEETINT_DISABLE_LATENCY_PROBE`. |
 
+`configure-external-nico --config <integration.json>` is the namespace-scoped Helm hook command for existing NICo deployments configured through defaults and environment variables. It preserves the selected image, merges the FI OTLP destination, backs up only its managed fields to the chart's dedicated Secret, and waits for rollout. `--restore` restores those fields before gateway removal. The command uses the hook Pod's projected Kubernetes credentials; ordinary collector, NICo, and gateway Pods retain their existing token settings. The mounted-TOML integration remains in `scripts/integrate_external_nico.py`.
+
 `run` also uses:
 
 | Setting | Description |
@@ -193,6 +195,8 @@ These notes describe how the collector works internally. Read them before changi
 **Sanitized types.** Product-model URI and error fields use transparent sanitized string types with private inner values, so every public construction path applies the same sanitization, including callers that build models without the Redfish source. They serialize as plain strings. Absolute and scheme-relative references keep only their path and fragment; relative paths stay relative with the query removed.
 
 **Helm rollout.** Helm generates only the collector TOML. ConfigMap checksum annotations restart the collector and NICo when targets change, and NICo's init container regenerates its configuration with `render-nico-config` into a pod-local `emptyDir` volume.
+
+**Dispatcher wakeups.** The BMC dispatcher retains a scheduler deadline while polling running work and handling queue notifications. A notification can arrive before the deadline, and the scheduler emits each deadline only once; retain the timer across that notification so requests resume after the token bucket is exhausted. Inventory and attestation continue to share the same per-BMC limits.
 
 ## Pull Requests
 

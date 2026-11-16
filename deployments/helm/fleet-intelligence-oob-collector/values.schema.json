@@ -154,7 +154,11 @@
           "additionalProperties": false,
           "required": ["expectedImage"],
           "properties": {
-            "expectedImage": {"type": "string"}
+            "expectedImage": {"type": "string"},
+            "configureOtlp": {"type": "boolean"},
+            "deploymentName": {"type": "string", "maxLength": 253, "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"},
+            "containerName": {"type": "string", "maxLength": 63, "pattern": "^$|^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"},
+            "configMode": {"type": "string", "enum": ["environment"]}
           }
         },
         "config": {

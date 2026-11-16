@@ -73,6 +73,13 @@ nicoHardwareHealth:
   external:
     # Exact image currently used by the pre-existing NICo Deployment; required in external mode.
     expectedImage: ""
+    # Opt in to post-install/post-upgrade OTLP configuration on an existing NICo.
+    configureOtlp: false
+    deploymentName: ""
+    containerName: ""
+    # The automatic hook supports NICo configured through defaults/environment.
+    # Mounted TOML integrations use scripts/integrate_external_nico.py.
+    configMode: environment
   # Collection settings; pod settings remain alongside this block.
   config:
     sensorFetchIntervalSeconds: 60

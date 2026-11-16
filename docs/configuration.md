@@ -176,6 +176,8 @@ The gateway requires NICo.
 
 With `deploymentMode: external`, the chart keeps NICo health enabled but does not create a NICo Deployment or Service. Set `nicoHardwareHealth.external.expectedImage` to the existing NICo image and `nicoHardwareHealth.image` to the FI-qualified replacement. The integration preserves customer endpoint sources, plugins, sinks, and unrelated settings while adding FI-owned telemetry configuration; follow the [external NICo integration procedure](external-nico-preserve-configuration.md). The default `managed` deployment mode preserves the bundled deployment.
 
+For an existing NICo configured through defaults and explicit environment variables, set `nicoHardwareHealth.external.configureOtlp: true`, `deploymentName`, `containerName`, and `configMode: environment`. A Helm hook adds the FI OTLP destination during installation and upgrade while retaining the existing image and customer destinations. The option defaults to `false`; see [automatic external NICo configuration](external-nico-preserve-configuration.md#configure-an-existing-nico-during-helm-installation-or-upgrade) for compatibility checks, backup, and removal.
+
 NICo defaults to automatic log collection: it starts with Redfish SSE streaming, falls back to periodic polling when SSE is unavailable or keeps failing, and retries SSE after 30 minutes of polling. You can select fixed SSE streaming or periodic polling with `nicoHardwareHealth.config.logsMode`. NICo's discovery, manager, and firmware collectors also emit each System, Manager, Chassis, and FirmwareInventory resource's `Status` as an OTLP log. It sends metrics and logs in batches of up to 512 records, at least every two seconds.
 
 ### NICo collection controls

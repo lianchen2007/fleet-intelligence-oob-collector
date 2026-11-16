@@ -44,6 +44,49 @@ def render(settings, template="configmap.yaml", workload=None, *, use_ci_values=
 
 
 class NicoHelmTests(unittest.TestCase):
+    def test_automatic_external_otlp_hook_preserves_image_and_limits_rbac(self):
+        external = {
+            "expectedImage": "customer-nico:v1",
+            "configureOtlp": True,
+            "deploymentName": "customer-nico",
+            "containerName": "health",
+            "configMode": "environment",
+        }
+        result = render({}, "external-nico-otel-hook.yaml", workload={
+            "deploymentMode": "external", "external": external,
+        })
+        self.assertEqual(result.returncode, 0, result.stderr)
+        rendered = result.stdout
+        self.assertIn('helm.sh/hook: post-install,post-upgrade', rendered)
+        self.assertIn('helm.sh/hook: pre-delete', rendered)
+        self.assertIn('helm.sh/resource-policy: keep', rendered)
+        self.assertIn('resourceNames: ["customer-nico"]', rendered)
+        self.assertIn('verbs: [get, patch]', rendered)
+        self.assertNotIn('resources: [pods]', rendered)
+        self.assertNotIn('kind: ClusterRole', rendered)
+        self.assertNotIn('fleet-intelligence-bmc-credentials', rendered)
+        self.assertIn('automountServiceAccountToken: true', rendered)
+        self.assertIn('- configure-external-nico', rendered)
+        self.assertIn('- --restore', rendered)
+        self.assertIn('"expectedImage":"customer-nico:v1"', rendered)
+        self.assertIn('"endpoint":"http://test-fleet-intelligence-oob-collector-otel-gateway:4317"', rendered)
+
+    def test_automatic_external_otlp_requires_explicit_target_names(self):
+        for missing in ("deploymentName", "containerName"):
+            external = {"expectedImage": "customer-nico:v1", "configureOtlp": True,
+                        "deploymentName": "customer-nico", "containerName": "health"}
+            external.pop(missing)
+            result = render({}, "external-nico-otel-hook.yaml", workload={
+                "deploymentMode": "external", "external": external,
+            })
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(missing, result.stderr)
+        result = render({}, "external-nico-otel-hook.yaml", workload={
+            "external": {"configureOtlp": True},
+        })
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploymentMode", result.stderr)
+
     def test_bundle_defaults_without_collection_overrides(self):
         result = render({}, use_ci_values=False)
         self.assertEqual(result.returncode, 0, result.stderr)

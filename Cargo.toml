@@ -69,8 +69,12 @@ name = "bmc-collector"
 path = "src/main.rs"
 
 [dependencies]
+base64.workspace = true
 backend-client.workspace = true
 reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
 clap.workspace = true
 bmc-attestation.workspace = true
 bmc-dispatch.workspace = true

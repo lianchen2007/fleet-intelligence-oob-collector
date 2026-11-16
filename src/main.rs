@@ -29,6 +29,8 @@ use fleet_intelligence_oob::{
     InventoryOptions, RuntimeOptions, run_inventory, run_runtime,
 };
 
+mod external_nico;
+
 #[derive(Debug, Parser)]
 #[command(name = "fleet-intelligence-oob", version = bmc_inventory::COLLECTOR_VERSION)]
 #[command(about = "Fleet Intelligence out-of-band collector")]
@@ -45,6 +47,8 @@ enum Command {
     Run(RuntimeArgs),
     #[command(about = "Generate NICo static configuration from the collector config")]
     RenderNicoConfig(RenderNicoConfigArgs),
+    #[command(about = "Configure OTLP on an existing same-namespace NICo Deployment")]
+    ConfigureExternalNico(external_nico::Arguments),
 }
 
 #[derive(Debug, Parser)]
@@ -195,6 +199,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let cli = Cli::parse();
     match cli.command {
+        Command::ConfigureExternalNico(args) => external_nico::run(args).await?,
         Command::Inventory(args) => {
             let format = args.format.into();
             run_inventory(args.collector.into_inventory_options(args.detail, format)).await?
